@@ -307,7 +307,7 @@ public class TreeWalk {
 				o = trees[i];
 				while (o.parent != null)
 					o = o.parent;
-				if (o instanceof CanonicalTreeParser) {
+				if (o instanceof CanonicalTreeParser && o.pathOffset == 0) {
 					o.matches = null;
 					o.matchShift = 0;
 					((CanonicalTreeParser) o).reset(db, ids[i]);
@@ -579,6 +579,21 @@ public class TreeWalk {
 	 */
 	public String getPathString() {
 		return pathOf(currentHead);
+	}
+
+	/**
+	 * Get the current entry's complete path as a UTF-8 byte array.
+	 * 
+	 * @return complete path of the current entry, from the root of the
+	 *         repository. If the current entry is in a subtree there will be at
+	 *         least one '/' in the returned string.
+	 */
+	public byte[] getRawPath() {
+		final AbstractTreeIterator t = currentHead;
+		final int n = t.pathLen;
+		final byte[] r = new byte[n];
+		System.arraycopy(t.path, 0, r, 0, n);
+		return r;
 	}
 
 	/**

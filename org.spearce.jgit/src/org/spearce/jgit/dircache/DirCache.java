@@ -51,8 +51,11 @@ import java.security.MessageDigest;
 import java.util.Comparator;
 
 import org.spearce.jgit.errors.CorruptObjectException;
+import org.spearce.jgit.errors.UnmergedPathException;
 import org.spearce.jgit.lib.Constants;
 import org.spearce.jgit.lib.LockFile;
+import org.spearce.jgit.lib.ObjectId;
+import org.spearce.jgit.lib.ObjectWriter;
 import org.spearce.jgit.lib.Repository;
 import org.spearce.jgit.util.MutableInteger;
 import org.spearce.jgit.util.NB;
@@ -105,6 +108,17 @@ public class DirCache {
 				return cmp;
 		}
 		return aLen - bLen;
+	}
+
+	/**
+	 * Create a new empty index which is never stored on disk.
+	 * 
+	 * @return an empty cache which has no backing store file. The cache may not
+	 *         be read or written, but it may be queried and updated (in
+	 *         memory).
+	 */
+	public static DirCache newInCore() {
+		return new DirCache(null);
 	}
 
 	/**
@@ -294,6 +308,8 @@ public class DirCache {
 	 *             library does not support.
 	 */
 	public void read() throws IOException, CorruptObjectException {
+		if (liveFile == null)
+			throw new IOException("DirCache does not have a backing file");
 		if (!liveFile.exists())
 			clear();
 		else if (liveFile.lastModified() != lastModified) {
@@ -404,6 +420,8 @@ public class DirCache {
 	 *             hold the lock.
 	 */
 	public boolean lock() throws IOException {
+		if (liveFile == null)
+			throw new IOException("DirCache does not have a backing file");
 		final LockFile tmp = new LockFile(liveFile);
 		if (tmp.lock()) {
 			tmp.setNeedStatInformation(true);
@@ -512,6 +530,8 @@ public class DirCache {
 	}
 
 	private void requireLocked(final LockFile tmp) {
+		if (liveFile == null)
+			throw new IllegalStateException("DirCache is not locked");
 		if (tmp == null)
 			throw new IllegalStateException("DirCache "
 					+ liveFile.getAbsolutePath() + " not locked.");
@@ -691,5 +711,22 @@ public class DirCache {
 			tree.validate(sortedEntries, entryCnt, 0, 0);
 		}
 		return tree;
+	}
+
+	/**
+	 * Write all index trees to the object store, returning the root tree.
+	 * 
+	 * @param ow
+	 *            the writer to use when serializing to the store.
+	 * @return identity for the root tree.
+	 * @throws UnmergedPathException
+	 *             one or more paths contain higher-order stages (stage > 0),
+	 *             which cannot be stored in a tree object.
+	 * @throws IOException
+	 *             an unexpected error occurred writing to the object store.
+	 */
+	public ObjectId writeTree(final ObjectWriter ow)
+			throws UnmergedPathException, IOException {
+		return getCacheTree(true).writeTree(sortedEntries, 0, 0, ow);
 	}
 }
